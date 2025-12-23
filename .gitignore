@@ -29,7 +29,3 @@ Thumbs.db
 # Test files
 test_*.py
 !tests/test_*.py
-
-# Output files (keep examples)
-output/*
-!output/.gitkeep
