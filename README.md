@@ -2,6 +2,8 @@
 
 > **An AI-powered system that transforms classic stories into new genres** — preserving narrative essence while reimagining setting, characters, and style using Large Language Models.
 
+**Built by [Hemant Sudarshan](https://github.com/HemantSudarshan)**
+
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8+-3776ab?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-API-412991?style=flat&logo=openai&logoColor=white)](https://openai.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
