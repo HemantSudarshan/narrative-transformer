@@ -3,49 +3,24 @@ Scene Generation Engine - Phase 4
 Generates individual scenes with full context awareness.
 """
 
-import json
 import re
 from typing import List, Tuple, Optional
-from openai import OpenAI
-from anthropic import Anthropic
-import google.generativeai as genai
 
-from config import DEFAULT_CONFIG, GENRE_TEMPLATES
+from config import GENRE_TEMPLATES
 from models import (
     SceneOutput, StoryState, WorldMapping, PlotBeat
 )
 from tension import TensionAnalyzer
+from llm_client import LLMClient
 
 
 class SceneGenerator:
     """Generates narrative scenes with context awareness."""
     
     def __init__(self, model: Optional[str] = None):
-        """Initialize generator."""
-        self.config = DEFAULT_CONFIG
-        self.model = model or self.config.default_model
+        """Initialize generator with LLM client."""
         self.tension_analyzer = TensionAnalyzer()
-        
-        if self.config.get_primary_api() == "gemini":
-            genai.configure(api_key=self.config.gemini_api_key)
-            self.client = genai.GenerativeModel(self.model)
-            self.api_type = "gemini"
-        elif self.config.get_primary_api() == "openai":
-            client_kwargs = {"api_key": self.config.openai_api_key}
-            if self.config.openai_base_url:
-                client_kwargs["base_url"] = self.config.openai_base_url
-                # OpenRouter requires these headers
-                client_kwargs["default_headers"] = {
-                    "HTTP-Referer": "https://github.com/narrative-transformer",
-                    "X-Title": "Narrative Transformer"
-                }
-            self.client = OpenAI(**client_kwargs)
-            self.api_type = "openai"
-        elif self.config.get_primary_api() == "anthropic":
-            self.client = Anthropic(api_key=self.config.anthropic_api_key)
-            self.api_type = "anthropic"
-        else:
-            raise ValueError("No valid API key configured.")
+        self.llm = LLMClient(model=model, json_mode=False)  # Creative writing, no JSON mode
     
     def generate_scene(
         self,
@@ -197,44 +172,13 @@ Write the scene now:"""
         return prompt
     
     def _call_llm(self, prompt: str) -> str:
-        """Call LLM API for generation."""
-        try:
-            if self.api_type == "gemini":
-                # For Gemini, prepend system instruction to prompt
-                full_prompt = "You are a creative writer specializing in immersive storytelling.\n\n" + prompt
-                response = self.client.generate_content(
-                    full_prompt,
-                    generation_config=genai.GenerationConfig(
-                        temperature=0.8,
-                        max_output_tokens=1500,
-                    )
-                )
-                return response.text
-            
-            elif self.api_type == "openai":
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": "You are a creative writer specializing in immersive storytelling."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.8,  # Higher for creativity
-                    max_tokens=1500
-                )
-                return response.choices[0].message.content
-            
-            elif self.api_type == "anthropic":
-                response = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=1500,
-                    temperature=0.8,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                return response.content[0].text
-        
-        except Exception as e:
-            print(f"    ❌ Generation error: {e}")
-            raise
+        """Call LLM using centralized client with retry logic."""
+        return self.llm.call(
+            prompt=prompt,
+            system_prompt="You are a creative writer specializing in immersive storytelling.",
+            temperature=0.8,
+            max_tokens=1500
+        )
     
     def _parse_scene_output(
         self,

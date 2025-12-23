@@ -4,44 +4,20 @@ Maps source elements to target genre systematically.
 """
 
 import json
-import re
-from typing import Optional
-from openai import OpenAI
-from anthropic import Anthropic
-import google.generativeai as genai
 
-from config import DEFAULT_CONFIG, GENRE_TEMPLATES
+from typing import Optional
+
+from config import GENRE_TEMPLATES
 from models import SourceAnalysis, WorldMapping, ElementMapping
+from llm_client import LLMClient
 
 
 class WorldMapper:
     """Maps source narrative elements to target genre."""
     
     def __init__(self, model: Optional[str] = None):
-        """Initialize mapper with API client."""
-        self.config = DEFAULT_CONFIG
-        self.model = model or self.config.default_model
-        
-        if self.config.get_primary_api() == "gemini":
-            genai.configure(api_key=self.config.gemini_api_key)
-            self.client = genai.GenerativeModel(self.model)
-            self.api_type = "gemini"
-        elif self.config.get_primary_api() == "openai":
-            client_kwargs = {"api_key": self.config.openai_api_key}
-            if self.config.openai_base_url:
-                client_kwargs["base_url"] = self.config.openai_base_url
-                # OpenRouter requires these headers
-                client_kwargs["default_headers"] = {
-                    "HTTP-Referer": "https://github.com/narrative-transformer",
-                    "X-Title": "Narrative Transformer"
-                }
-            self.client = OpenAI(**client_kwargs)
-            self.api_type = "openai"
-        elif self.config.get_primary_api() == "anthropic":
-            self.client = Anthropic(api_key=self.config.anthropic_api_key)
-            self.api_type = "anthropic"
-        else:
-            raise ValueError("No valid API key configured.")
+        """Initialize mapper with LLM client."""
+        self.llm = LLMClient(model=model, json_mode=True)
     
     def create_mapping(
         self,
@@ -164,59 +140,18 @@ Begin mapping:"""
         return prompt
     
     def _call_llm(self, prompt: str) -> str:
-        """Call LLM API."""
-        try:
-            if self.api_type == "gemini":
-                # For Gemini, prepend system instruction to prompt
-                full_prompt = "You are a creative world-building expert. Always respond with valid JSON.\n\n" + prompt
-                response = self.client.generate_content(
-                    full_prompt,
-                    generation_config=genai.GenerationConfig(
-                        temperature=0.8,
-                        max_output_tokens=2000,
-                    )
-                )
-                return response.text
-            
-            elif self.api_type == "openai":
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": "You are a creative world-building expert. Always respond with valid JSON."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.8,  # Higher for creativity
-                    max_tokens=2000
-                )
-                return response.choices[0].message.content
-            
-            elif self.api_type == "anthropic":
-                response = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=2000,
-                    temperature=0.8,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                return response.content[0].text
-        
-        except Exception as e:
-            print(f"❌ API Error: {e}")
-            raise
+        """Call LLM using centralized client with retry logic."""
+        return self.llm.call(
+            prompt=prompt,
+            system_prompt="You are a creative world-building expert. Always respond with valid JSON.",
+            temperature=0.8,
+            max_tokens=2000
+        )
     
     def _parse_mapping(self, response_text: str, genre: str, genre_template) -> WorldMapping:
         """Parse LLM response into WorldMapping."""
-        
-        # Clean response
-        json_text = response_text.strip()
-        if json_text.startswith("```"):
-            json_text = re.sub(r'^```json\s*', '', json_text)
-            json_text = re.sub(r'```\s*$', '', json_text)
-        
-        try:
-            data = json.loads(json_text)
-        except json.JSONDecodeError as e:
-            print(f"❌ Failed to parse mapping JSON: {e}")
-            raise
+        # Use centralized JSON parsing
+        data = LLMClient.parse_json_response(response_text)
         
         # Parse character mappings
         char_mappings = []

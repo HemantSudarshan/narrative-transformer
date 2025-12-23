@@ -3,48 +3,21 @@ Source Analysis Engine - Phase 1
 Extracts narrative DNA from source material.
 """
 
-import json
-import re
 from typing import Optional
-from openai import OpenAI
-from anthropic import Anthropic
-import google.generativeai as genai
 
-from config import DEFAULT_CONFIG, SAVE_THE_CAT_BEATS
+from config import SAVE_THE_CAT_BEATS
 from models import (
     SourceAnalysis, Character, PlotBeat, Conflict
 )
+from llm_client import LLMClient
 
 
 class SourceAnalyzer:
     """Analyzes source narratives to extract structural elements."""
     
     def __init__(self, model: Optional[str] = None):
-        """Initialize analyzer with API client."""
-        self.config = DEFAULT_CONFIG
-        self.model = model or self.config.default_model
-        
-        # Initialize appropriate client
-        if self.config.get_primary_api() == "gemini":
-            genai.configure(api_key=self.config.gemini_api_key)
-            self.client = genai.GenerativeModel(self.model)
-            self.api_type = "gemini"
-        elif self.config.get_primary_api() == "openai":
-            client_kwargs = {"api_key": self.config.openai_api_key}
-            if self.config.openai_base_url:
-                client_kwargs["base_url"] = self.config.openai_base_url
-                # OpenRouter requires these headers
-                client_kwargs["default_headers"] = {
-                    "HTTP-Referer": "https://github.com/narrative-transformer",
-                    "X-Title": "Narrative Transformer"
-                }
-            self.client = OpenAI(**client_kwargs)
-            self.api_type = "openai"
-        elif self.config.get_primary_api() == "anthropic":
-            self.client = Anthropic(api_key=self.config.anthropic_api_key)
-            self.api_type = "anthropic"
-        else:
-            raise ValueError("No valid API key configured. Check your .env file.")
+        """Initialize analyzer with LLM client."""
+        self.llm = LLMClient(model=model, json_mode=True)
     
     def analyze(self, source_text: str, source_title: str) -> SourceAnalysis:
         """
@@ -166,64 +139,16 @@ Begin analysis:"""
         return prompt
     
     def _call_llm(self, prompt: str) -> str:
-        """Call the LLM API with error handling."""
-        try:
-            if self.api_type == "gemini":
-                # For Gemini, prepend system instruction to prompt
-                full_prompt = "You are a narrative analysis expert. Always respond with valid JSON.\n\n" + prompt
-                response = self.client.generate_content(
-                    full_prompt,
-                    generation_config=genai.GenerationConfig(
-                        temperature=self.config.temperature,
-                        max_output_tokens=self.config.max_tokens,
-                    )
-                )
-                return response.text
-            
-            elif self.api_type == "openai":
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": "You are a narrative analysis expert. Always respond with valid JSON."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=self.config.temperature,
-                    max_tokens=self.config.max_tokens
-                )
-                return response.choices[0].message.content
-            
-            elif self.api_type == "anthropic":
-                response = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=self.config.max_tokens,
-                    temperature=self.config.temperature,
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-                return response.content[0].text
-        
-        except Exception as e:
-            print(f"❌ API Error: {e}")
-            raise
+        """Call LLM using centralized client with retry logic."""
+        return self.llm.call(
+            prompt=prompt,
+            system_prompt="You are a narrative analysis expert. Always respond with valid JSON."
+        )
     
     def _parse_analysis(self, response_text: str, title: str) -> SourceAnalysis:
         """Parse LLM response into SourceAnalysis object."""
-        
-        # Extract JSON from response (handle markdown code blocks)
-        json_text = response_text.strip()
-        
-        # Remove markdown code blocks if present
-        if json_text.startswith("```"):
-            json_text = re.sub(r'^```json\s*', '', json_text)
-            json_text = re.sub(r'```\s*$', '', json_text)
-        
-        try:
-            data = json.loads(json_text)
-        except json.JSONDecodeError as e:
-            print(f"❌ Failed to parse JSON: {e}")
-            print(f"Response was: {response_text[:500]}...")
-            raise
+        # Use centralized JSON parsing
+        data = LLMClient.parse_json_response(response_text)
         
         # Parse characters
         characters = []
