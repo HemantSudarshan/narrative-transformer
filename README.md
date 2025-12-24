@@ -238,11 +238,18 @@ See [APPROACH.md](APPROACH.md) for full analysis of alternatives considered.
 
 ## 🔮 Future Improvements
 
+**Core Features:**
 - [ ] Multi-POV support (scenes from different character perspectives)
 - [ ] Interactive mode (approve/edit at each stage)
-- [ ] Web UI with streaming output
 - [ ] Novel-length optimization
 - [ ] Style transfer from example texts
+
+**Optional Extensions (for contributors):**
+- [ ] **Streamlit UI** — Web interface with live progress and tension visualization
+- [ ] **MLOps Integration** — Experiment tracking (MLflow/W&B), cost monitoring, A/B testing
+- [ ] **GitHub Actions CI** — Automated testing on every push
+- [ ] **REST API** — FastAPI endpoint for programmatic access
+- [ ] **Docker** — Containerized deployment
 
 ---
 
