@@ -20,6 +20,8 @@ Tortoise & Hare → Cyberpunk     (race → data heist competition)
 Icarus → Post-Apocalyptic       (wax wings → makeshift glider)
 ```
 
+> 💡 **The system is demonstrated on Cinderella, Icarus, and Tortoise & Hare as examples, but is designed to generalize to any public-domain work** — Shakespeare, Greek myths, folk tales, or classic literature.
+
 **Not just "rewriting"** — the system analyzes narrative structure, maps elements systematically, and generates with adaptive pacing control.
 
 ---
